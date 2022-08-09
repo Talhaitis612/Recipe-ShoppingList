@@ -1,6 +1,8 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { catchError, throwError } from 'rxjs';
+import { Router } from '@angular/router';
+import { BehaviorSubject, catchError, tap, throwError } from 'rxjs';
+import { User } from './user.mode';
 
 export interface AuthResponseData {
   kind: string;
@@ -16,9 +18,9 @@ export interface AuthResponseData {
   providedIn: 'root',
 })
 export class AuthService {
-  baseURL =
-    'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyBrX3us-jwSd8CmJDc5ihVpzTI2zDBH39U';
-  constructor(private http: HttpClient) {}
+  user = new BehaviorSubject<User | any>(null);
+
+  constructor(private http: HttpClient, private router: Router) {}
 
   signUp(email: string, password: string) {
     return this.http
@@ -30,7 +32,17 @@ export class AuthService {
           returnSecureToken: true,
         }
       )
-      .pipe(catchError(this.handleError));
+      .pipe(
+        catchError(this.handleError),
+        tap((resData: any) => {
+          this.handleAuthentication(
+            resData.email,
+            resData.localId,
+            resData.idToken,
+            +resData.expiresIn
+          );
+        })
+      );
   }
   login(email: string, password: string) {
     return this.http
@@ -42,7 +54,33 @@ export class AuthService {
           returnSecureToken: true,
         }
       )
-      .pipe(catchError(this.handleError));
+      .pipe(
+        catchError(this.handleError),
+        tap((resData: any) => {
+          this.handleAuthentication(
+            resData.email,
+            resData.localId,
+            resData.idToken,
+            +resData.expiresIn
+          );
+        })
+      );
+  }
+
+  logout(){
+    this.user.next(null);
+    this.router.navigate(['/auth']);
+  }
+
+  private handleAuthentication(
+    email: string,
+    userId: string,
+    token: string,
+    expiresIn: number
+  ) {
+    const expirationDate = new Date(new Date().getTime() + expiresIn * 1000);
+    const user = new User(email, userId, token, expirationDate);
+    this.user.next(user);
   }
 
   private handleError(errorRes: HttpErrorResponse) {
